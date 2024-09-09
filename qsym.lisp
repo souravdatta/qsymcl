@@ -1,0 +1,97 @@
+(defpackage :qsym.matrix
+  (:use :cl)
+  (:export ))
+
+(in-package :qsym.matrix)
+
+(defun cmatrix (r c &key (elems nil))
+  (let ((m (make-array (list r c)))
+	(arg-size (length elems))
+	(vix 0))
+    (loop for i from 0 to (- r 1)
+	  do (loop for j from 0 to (- c 1)
+		   do (progn
+			(setf (aref m i j)
+			      (if (< vix arg-size)
+				  (nth vix elems)
+				  #c(0 0)))
+			(incf vix))))
+    m))
+
+(defun rows (cm)
+    (array-dimension cm 0))
+
+(defun cols (cm)
+    (array-dimension cm 1))
+
+(defun cmatrix-map (cm f)
+  (let ((r (rows cm))
+	(c (cols cm)))
+    (cmatrix r c
+	     :elems (loop for i from 0 to (- r 1)
+			  append (loop for j from 0 to (- c 1)
+				       collect (funcall f
+							(aref cm i j)))))))
+
+(defun cmatrix-each (cm1 cm2 f)
+  (let* ((r1 (rows cm1))
+	 (c1 (cols cm1))
+	 (r2 (rows cm2))
+	 (c2 (cols cm2))
+	 (rm (cmatrix r1 c1)))
+    (when (or (not (= r1 r2))
+	      (not (= c1 c2)))
+      (error "Invalid dimensions for element wise operation"))
+    (dotimes (i r1)
+      (dotimes (j c1)
+	(setf (aref rm i j)
+	      (funcall f
+		       (aref cm1 i j)
+		       (aref cm2 i j)))))
+    rm))
+
+(defun cmatrix+ (cm1 cm2)
+  (cmatrix-each cm1 cm2 #'+))
+
+(defun cmatrix- (cm1 cm2)
+  (cmatrix-each cm1 cm2 #'-))
+
+(defun cmatrix/ (cm1 cm2)
+  (cmatrix-each cm1 cm2 #'/))
+
+(defun cmatrix-tensor-product (cm1 cm2)
+  (let* ((r1 (rows cm1))
+	 (c1 (cols cm1))
+	 (r2 (rows cm2))
+	 (c2 (cols cm2))
+	 (rm (cmatrix (* r1 r2)
+		      (* c1 c2))))
+    (loop for i from 0 to (- r1 1)
+	  do (loop for j from 0 to (- c1 1)
+		   do (let ((p1 (aref cm1 i j)))
+			(loop for k from 0 to (- r2 1)
+			      do (loop for l from 0 to (- c2 1)
+				       do (let* ((p2 (aref cm2 k l))
+						 (r (* p1 p2)))
+					    (setf (aref rm
+							(+ (* i r2) k)
+							(+ (* j c2) l))
+						  r)))))))
+    rm))
+ 
+(defun cmatrix* (cm1 cm2)
+  (let* ((r1 (rows cm1))
+	 (c1 (cols cm1))
+	 (r2 (rows cm2))
+	 (c2 (cols cm2)))
+    (if (not (= c1 r2))
+	(error "Invalid dimensions for -- MATRIX MULT")
+	(let ((rm (cmatrix r1
+			   c2)))
+	  (loop for i from 0 to (- r1 1)
+		do (loop for j from 0 to (- c2 1)
+			 do (setf (aref rm i j)
+				  (loop for k from 0 to (- c1 1)
+					sum (* (aref cm1 i k)
+					       (aref cm2 k j))))))
+	  rm))))
